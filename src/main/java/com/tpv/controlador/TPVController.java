@@ -14,14 +14,22 @@ import javafx.scene.control.TextField;
 import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.scene.layout.FlowPane;
 
-// ¡NUEVAS IMPORTACIONES PARA GUARDAR ARCHIVOS!
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 import java.io.File;
-import java.io.FileWriter;
-import java.io.PrintWriter;
 import java.io.IOException;
 import java.util.List;
+
+// ¡NUEVAS IMPORTACIONES PARA ARREGLAR EXCEL!
+import java.io.FileOutputStream;
+import java.io.OutputStreamWriter;
+import java.io.PrintWriter;
+import java.nio.charset.StandardCharsets;
+
+import javafx.scene.image.Image;
+import javafx.scene.image.ImageView;
+import javafx.scene.layout.VBox;
+import javafx.geometry.Pos;
 
 public class TPVController {
 
@@ -71,7 +79,6 @@ public class TPVController {
             lblTotal.setText("TOTAL: 0.00 €");
         });
 
-        // --- BOTÓN COBRAR ACTUALIZADO ---
         btnCobrar.setOnAction(event -> {
             if (listaTicket.isEmpty()) {
                 javafx.scene.control.Alert alerta = new javafx.scene.control.Alert(javafx.scene.control.Alert.AlertType.WARNING);
@@ -80,44 +87,61 @@ public class TPVController {
                 alerta.setContentText("No hay ningún producto en el ticket para cobrar.");
                 alerta.showAndWait();
             } else {
-                // 1. ABRIR VENTANA PARA GUARDAR EL CSV
+                
+                // 1. Registramos la venta en la Base de Datos y restamos Stock
+                com.tpv.db.VentaDAO ventaDAO = new com.tpv.db.VentaDAO();
+                boolean guardadoBD = ventaDAO.registrarVenta(precioTotal, listaTicket);
+                
+                if (!guardadoBD) {
+                    javafx.scene.control.Alert alertaError = new javafx.scene.control.Alert(javafx.scene.control.Alert.AlertType.ERROR);
+                    alertaError.setHeaderText("Error en Base de Datos");
+                    alertaError.setContentText("No se ha podido guardar la venta. Revisa la consola.");
+                    alertaError.showAndWait();
+                    return;
+                }
+
+                // 2. ABRIR VENTANA PARA GUARDAR EL CSV
                 FileChooser fileChooser = new FileChooser();
                 fileChooser.setTitle("Guardar Ticket en CSV");
-                // Nombre por defecto
                 fileChooser.setInitialFileName("ticket_venta.csv"); 
-                // Filtro para que solo deje guardar en formato CSV
                 fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("Archivos CSV (*.csv)", "*.csv"));
 
-                // Obtenemos la ventana actual para mostrar encima el diálogo
                 Stage stage = (Stage) btnCobrar.getScene().getWindow();
                 File file = fileChooser.showSaveDialog(stage);
 
-                // Si el usuario ha elegido una ruta y no ha cancelado...
                 if (file != null) {
-                    try (PrintWriter writer = new PrintWriter(new FileWriter(file))) {
-                        // Escribimos la cabecera del CSV (las columnas)
-                        writer.println("Producto,Precio Unitario,Cantidad,Subtotal");
+                    // ¡AQUÍ ESTÁ LA MAGIA PARA EXCEL! 
+                    // Usamos UTF-8 explícitamente y añadimos el BOM para los acentos.
+                    try (PrintWriter writer = new PrintWriter(new OutputStreamWriter(new FileOutputStream(file), StandardCharsets.UTF_8))) {
                         
-                        // Recorremos el ticket y escribimos cada línea
+                        // Escribimos el caracter BOM invisible al principio
+                        writer.write('\ufeff');
+                        
+                        // Usamos punto y coma (;) en lugar de coma (,)
+                        writer.println("Producto;Precio Unitario;Cantidad;Subtotal");
+                        
                         for (Producto p : listaTicket) {
                             double subtotal = p.getPrecio() * p.getCantidad();
-                            writer.println(p.getNombre() + "," + p.getPrecio() + " €," + p.getCantidad() + "," + subtotal + " €");
+                            // Reemplazamos los puntos de los precios por comas para que Excel los sume bien si hace falta
+                            String precioStr = String.format("%.2f", p.getPrecio());
+                            String subtotalStr = String.format("%.2f", subtotal);
+                            
+                            writer.println(p.getNombre() + ";" + precioStr + " €;" + p.getCantidad() + ";" + subtotalStr + " €");
                         }
                         
-                        // Añadimos el total al final
-                        writer.println(",,,"); // Celdas vacías para alinear
-                        writer.println("TOTAL,,," + precioTotal + " €");
+                        writer.println(";;;"); 
+                        writer.println("TOTAL;;;" + String.format("%.2f", precioTotal) + " €");
                         
                     } catch (IOException e) {
-                        System.out.println("Error al guardar el archivo CSV: " + e.getMessage());
+                        System.out.println("Error al guardar el CSV: " + e.getMessage());
                     }
                 }
 
-                // 2. MOSTRAR MENSAJE DE ÉXITO Y LIMPIAR
+                // 3. MOSTRAR MENSAJE DE ÉXITO Y LIMPIAR
                 javafx.scene.control.Alert alerta = new javafx.scene.control.Alert(javafx.scene.control.Alert.AlertType.INFORMATION);
                 alerta.setTitle("Pago completado");
                 alerta.setHeaderText("¡Cobro realizado con éxito!");
-                alerta.setContentText(String.format("Total cobrado: %.2f €\n¡Gracias por su compra!", precioTotal));
+                alerta.setContentText(String.format("Total cobrado: %.2f €\nSe ha actualizado el stock en la base de datos.", precioTotal));
                 alerta.showAndWait();
                 
                 listaTicket.clear();
@@ -133,10 +157,11 @@ public class TPVController {
         cargarBotonesProductos(categoriaActual);
     }
 
+ // --- EL DIBUJANTE DE BOTONES (VERSIÓN PREMIUM UI/UX) ---
     private void cargarBotonesProductos(String categoriaFiltro) {
         panelProductos.getChildren().clear(); 
 
-        ProductoDAO dao = new ProductoDAO();
+        com.tpv.db.ProductoDAO dao = new com.tpv.db.ProductoDAO();
         List<Producto> listaProductos = dao.obtenerTodos();
         
         String textoBuscado = txtBuscar.getText().toLowerCase();
@@ -147,9 +172,38 @@ public class TPVController {
 
             if (coincideCategoria && coincideTexto) {
                 
-                Button btnProducto = new Button(p.getNombre() + "\n" + p.getPrecio() + "€");
-                btnProducto.setPrefSize(120, 100); 
-                btnProducto.setStyle("-fx-font-size: 14px; -fx-font-weight: bold; -fx-cursor: hand;");
+                Button btnProducto = new Button();
+                btnProducto.setPrefSize(130, 130); 
+                btnProducto.getStyleClass().add("boton-producto"); // Conectamos con el CSS
+                
+                VBox cajaContenido = new VBox();
+                cajaContenido.setAlignment(Pos.CENTER);
+                cajaContenido.setSpacing(5); 
+                
+                ImageView imagenVista = new ImageView();
+                imagenVista.setFitHeight(60);
+                imagenVista.setFitWidth(60);
+                imagenVista.setPreserveRatio(true);
+                
+                // Buscamos la foto en la carpeta /imagenes/
+                try {
+                    String nombreFoto = p.getNombre().toLowerCase().replace(" ", "_") + ".png";
+                    java.net.URL urlImagen = getClass().getResource("/imagenes/" + nombreFoto);
+                    if (urlImagen != null) {
+                        imagenVista.setImage(new Image(urlImagen.toExternalForm()));
+                    }
+                } catch (Exception e) {
+                    System.out.println("No se encontró imagen para: " + p.getNombre());
+                }
+
+                Label lblNombre = new Label(p.getNombre());
+                lblNombre.getStyleClass().add("etiqueta-nombre");
+                
+                Label lblPrecio = new Label(String.format("%.2f €", p.getPrecio()));
+                lblPrecio.getStyleClass().add("etiqueta-precio");
+
+                cajaContenido.getChildren().addAll(imagenVista, lblNombre, lblPrecio);
+                btnProducto.setGraphic(cajaContenido);
                 
                 btnProducto.setOnAction(event -> {
                     boolean encontrado = false;

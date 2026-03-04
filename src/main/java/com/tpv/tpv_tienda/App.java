@@ -10,24 +10,22 @@ import javafx.stage.Stage;
 public class App extends Application {
 
     @Override
-    public void start(Stage primaryStage) throws Exception {
-        // 1. Cargar el diseño FXML que creamos en Scene Builder
-        // El "/" indica que busque en la carpeta src/main/resources
-        Parent root = FXMLLoader.load(getClass().getResource("/VistaTPV.fxml"));
-
-        // 2. Crear la "Escena" (el contenido de la ventana)
-        Scene scene = new Scene(root);
-
-        // 3. Configurar la "Ventana" (Stage)
-        primaryStage.setTitle("Mi TPV Profesional");
-        primaryStage.setScene(scene);
-        
-        // Evita que la ventana se haga súper pequeña
-        primaryStage.setMinWidth(950);
-        primaryStage.setMinHeight(600);
-        
-        // 4. ¡Mostrar la ventana!
-        primaryStage.show();
+    public void start(Stage primaryStage) {
+        try {
+            // AHORA ARRANCAMOS POR EL LOGIN
+            Parent root = FXMLLoader.load(getClass().getResource("/Login.fxml"));
+            
+            // Hacemos la ventana más pequeñita (350x400) para que parezca un login real
+            Scene scene = new Scene(root, 350, 400);
+            
+            primaryStage.setTitle("Acceso TPV");
+            primaryStage.setScene(scene);
+            primaryStage.setResizable(false); // Evitamos que puedan maximizar el login
+            primaryStage.show();
+            
+        } catch(Exception e) {
+            e.printStackTrace();
+        }
     }
 
     public static void main(String[] args) {

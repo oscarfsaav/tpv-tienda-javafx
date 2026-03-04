@@ -1,0 +1,28 @@
+/* --- estilos.css --- */
+
+.boton-producto {
+    -fx-background-color: white;
+    -fx-border-color: #dcdde1;
+    -fx-border-radius: 10;
+    -fx-background-radius: 10;
+    -fx-cursor: hand;
+    -fx-effect: dropshadow(three-pass-box, rgba(0,0,0,0.1), 5, 0, 0, 2);
+}
+
+.boton-producto:hover {
+    -fx-background-color: #f5f6fa;
+    -fx-border-color: #3498db;
+    -fx-effect: dropshadow(three-pass-box, rgba(52,152,219,0.3), 8, 0, 0, 2);
+}
+
+.etiqueta-nombre {
+    -fx-font-size: 14px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #2c3e50;
+}
+
+.etiqueta-precio {
+    -fx-font-size: 14px;
+    -fx-text-fill: #27ae60;
+    -fx-font-weight: bold;
+}
